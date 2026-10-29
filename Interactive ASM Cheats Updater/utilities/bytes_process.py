@@ -62,7 +62,17 @@ def bytesarray_escape(bytes_array) -> bytearray:
         byte_cache = b"\\("
     return byte_cache
 
+def feature_matches_everything(bytes_feature) -> bool:
+    # Hints: a feature is the regex source built from re.escape'd bytes plus '(.{n})'
+    # wildcards. With no literal byte left it matches at every offset of the main file
+    # (adrp masks a whole instruction, so a 1-instruction wing can degenerate to '(.{4})').
+    return re.sub(rb'\(\.\{\d+\}\)', b'', bytes_feature) == b''
+
 def bytesarray_findall(bytes_file, bytes_feature) -> list:
+    # Hints: an empty or all-wildcard feature would return one hit per byte of the main
+    # file, so get_bytes_feature() yielding nothing has to mean "not located".
+    if not bytes_feature or feature_matches_everything(bytes_feature):
+        return []
     hit_addr = []
     sliced_addr = 0
     bytes_file_len = len(bytes_file)
@@ -159,6 +169,8 @@ def get_bytes_feature(bytes_file, address, wing_length, asm_type = 'ARM64'):
         real_addr_offset = address[0]
     if end_address > len(bytes_file) - 1:
         end_address = len(bytes_file) - 1
+    if start_address >= end_address:  # Hints: address outside the file, nothing to feature
+        return ['', [start_address, end_address], real_addr_offset, 0]
     feature_size = end_address - start_address
     asm_binarray = bytes_file[start_address : end_address]
     
