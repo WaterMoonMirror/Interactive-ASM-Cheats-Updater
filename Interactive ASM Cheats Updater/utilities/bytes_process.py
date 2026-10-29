@@ -182,12 +182,27 @@ def get_bytes_feature(bytes_file, address, wing_length, asm_type = 'ARM64'):
         Disassembler = Cs(CS_ARCH_ARM, CS_MODE_LITTLE_ENDIAN)
     
     bytes_feature = bytearray()
+    decoded_only = bytearray()
     adrp_flag = False
     for index in range(len(padding_dict)):
+        segment_available = True
         if padding_dict[str(index)]['is_removed']:
             bytes_feature += padding_dict[str(index)]['bytearray']
+            decoded_only += padding_dict[str(index)]['bytearray']
         else:
-            for i in Disassembler.disasm(padding_dict[str(index)]['bytearray'], padding_dict[str(index)]['start_address']):
+            segment = padding_dict[str(index)]['bytearray']
+            segment_addr = padding_dict[str(index)]['start_address']
+            decoded = {i.address: i for i in Disassembler.disasm(segment, segment_addr)}
+            # Hints: capstone stops at the first word it cannot decode, which left an empty
+            # feature for cheats pointing at data. Keep those words as literal bytes, but
+            # also keep the truncated feature for the caller to prefer (see below).
+            for offset in range(0, len(segment), 4):
+                if segment_addr + offset not in decoded:
+                    bytes_feature += re.escape(bytes(segment[offset : offset + 4]))
+                    segment_available = False
+                    adrp_flag = False
+                    continue
+                i = decoded[segment_addr + offset]
                 byte_cache = bytearray(0)
                 if asm_type == 'ARM64':
                     if (i.mnemonic == 'bl' or i.mnemonic == 'b' or ('b.' in i.mnemonic)
@@ -231,10 +246,24 @@ def get_bytes_feature(bytes_file, address, wing_length, asm_type = 'ARM64'):
                         byte_cache = re.escape(bytearray(i.bytes))
 
                 bytes_feature += byte_cache
+                if segment_available:
+                    decoded_only += byte_cache
+
+    literal_feature = True
+    if decoded_only and not feature_matches_everything(decoded_only):
+        bytes_feature = decoded_only
+        literal_feature = False
 
     bytes_feature_hex = ''.join('{:02x}'.format(x) for x in bytes_feature)
 
-    return [bytes_feature_hex, [start_address, end_address], real_addr_offset, feature_size]
+    return [bytes_feature_hex, [start_address, end_address], real_addr_offset, feature_size, literal_feature]
+
+def align_hits(hit_start_addr, literal_feature) -> list:
+    # Hints: a feature built from raw data bytes can match at any byte offset, and an offset
+    # that is not instruction-aligned cannot be the real home of what the cheat points at.
+    if not literal_feature:
+        return hit_start_addr
+    return [hit for hit in hit_start_addr if hit % 4 == 0]
 
 def get_bytes_feature_lite(bytes_file, address, asm_type = 'ARM64'):
     bytes_feature_pack = get_bytes_feature(bytes_file, address, [0, 0], asm_type)
@@ -322,9 +351,9 @@ def find_single_feature_addr(main_file_bundle, bytes_feature_hex, old_feature_lo
 def find_feature_addr(main_file_bundle, addr_range, wing_length, asm_type = 'ARM64'):
     [old_main_file, new_main_file] = main_file_bundle
 
-    [bytes_feature_hex, feature_loc, real_addr_offset, feature_size] = get_bytes_feature(old_main_file, addr_range, wing_length, asm_type)
+    [bytes_feature_hex, feature_loc, real_addr_offset, feature_size, literal_feature] = get_bytes_feature(old_main_file, addr_range, wing_length, asm_type)
     bytes_feature = bytes(bytearray.fromhex(bytes_feature_hex))
-    hit_start_addr = bytesarray_findall(new_main_file, bytes_feature)
+    hit_start_addr = align_hits(bytesarray_findall(new_main_file, bytes_feature), literal_feature)
     hit_end_addr = list(map(lambda x:x+feature_size, hit_start_addr))
 
     # return [hit_start_addr, wing_length, real_addr_offset]  # Hints: For progress bar test only, or try "Regenerate" button with wing_length set to 0 directly
@@ -337,9 +366,9 @@ def find_feature_addr(main_file_bundle, addr_range, wing_length, asm_type = 'ARM
     
     # Hints: reforge wing_length
     wing_length_l = [1, 0]
-    [bytes_feature_hex_l, feature_loc_l, real_addr_offset_l, feature_size_l] = get_bytes_feature(old_main_file, addr_range, wing_length_l, asm_type)
+    [bytes_feature_hex_l, feature_loc_l, real_addr_offset_l, feature_size_l, literal_feature_l] = get_bytes_feature(old_main_file, addr_range, wing_length_l, asm_type)
     bytes_feature_l = bytes(bytearray.fromhex(bytes_feature_hex_l))
-    hit_start_addr_l = bytesarray_findall(new_main_file, bytes_feature_l)
+    hit_start_addr_l = align_hits(bytesarray_findall(new_main_file, bytes_feature_l), literal_feature_l)
     hit_end_addr_l = list(map(lambda x:x+feature_size_l, hit_start_addr_l))
     real_addr_offset_l -= wing_length_l[0] * 4
     [hit_start_addr_l, wing_length_l] = find_single_feature_addr(main_file_bundle, bytes_feature_hex_l, feature_loc_l, hit_start_addr_l, hit_end_addr_l, wing_length_l, asm_type)
@@ -349,9 +378,9 @@ def find_feature_addr(main_file_bundle, addr_range, wing_length, asm_type = 'ARM
         return [hit_start_addr_l, wing_length_l, real_addr_offset_l]
     
     wing_length_r = [0, 1]
-    [bytes_feature_hex_r, feature_loc_r, real_addr_offset_r, feature_size_r] = get_bytes_feature(old_main_file, addr_range, wing_length_r, asm_type)
+    [bytes_feature_hex_r, feature_loc_r, real_addr_offset_r, feature_size_r, literal_feature_r] = get_bytes_feature(old_main_file, addr_range, wing_length_r, asm_type)
     bytes_feature_r = bytes(bytearray.fromhex(bytes_feature_hex_r))
-    hit_start_addr_r = bytesarray_findall(new_main_file, bytes_feature_r)
+    hit_start_addr_r = align_hits(bytesarray_findall(new_main_file, bytes_feature_r), literal_feature_r)
     hit_end_addr_r = list(map(lambda x:x+feature_size_r, hit_start_addr_r))
     real_addr_offset_r -= wing_length_r[0] * 4
     [hit_start_addr_r, wing_length_r] = find_single_feature_addr(main_file_bundle, bytes_feature_hex_r, feature_loc_r, hit_start_addr_r, hit_end_addr_r, wing_length_r, asm_type)
