@@ -2,12 +2,17 @@ import re
 from copy import deepcopy
 import time
 import tkinter
+import tkinter.ttk
 from capstone import *
 from keystone import *
 
 class Progress_Bar:
+	# Hints: Toplevel of the running app, not a second Tk interpreter.
+	# update_idletasks() redraws without dispatching clicks into the search still running.
+	redraw_interval = 0.05
+
 	def __init__(self, bytes_file_size):
-		self.root = tkinter.Tk()
+		self.root = tkinter.Toplevel(tkinter._default_root)
 		self.root.geometry('800x30')
 		self.root.title('Locating addresses ...')
 		self.left_text = tkinter.Label(self.root, text='Searching  0%')
@@ -20,11 +25,14 @@ class Progress_Bar:
 		self.progressbarOne['maximum'] = bytes_file_size
 		self.bytes_file_size = bytes_file_size
 		self.timer_start = time.time()
-		self.timer_stop = self.timer_start
+		self.next_redraw = 0.0
 
 	def update(self, current_address):
-		self.timer_stop = time.time()
-		elapsed_time = self.timer_stop - self.timer_start
+		now = time.time()
+		if now < self.next_redraw:  # Hints: one Tcl call per hit would dominate the scan itself
+			return
+		self.next_redraw = now + self.redraw_interval
+		elapsed_time = now - self.timer_start
 		if elapsed_time != 0:
 			process_speed = current_address/elapsed_time
 			if process_speed != 0:
@@ -32,7 +40,7 @@ class Progress_Bar:
 				self.left_text.config(text=f'Locating  {current_address*100//self.bytes_file_size}%')
 				self.progressbarOne['value'] = current_address
 				self.right_text.config(text=f'{current_address}/{self.bytes_file_size} [{time.strftime("%M:%S", time.localtime(elapsed_time))}<{time.strftime("%M:%S", time.localtime(eta_time))}]')
-				self.root.update()
+				self.root.update_idletasks()
 	
 	def destroy(self):
 		self.root.destroy()
@@ -58,20 +66,21 @@ def bytesarray_findall(bytes_file, bytes_feature) -> list:
     hit_addr = []
     sliced_addr = 0
     bytes_file_len = len(bytes_file)
-    need_progress_bar = (bytes_file_len > 100000)
+    # Hints: scan by offset, slicing here would copy the whole file once per hit
+    need_progress_bar = (bytes_file_len > 100000 and tkinter._default_root is not None)
+    pattern = re.compile(bytes_feature, re.DOTALL)
     if need_progress_bar:
         progress_bar = Progress_Bar(bytes_file_len)
     while True:
         if need_progress_bar:
             progress_bar.update(sliced_addr)
-        result = re.search(bytes_feature, bytes_file, re.DOTALL)
+        result = pattern.search(bytes_file, sliced_addr)
         if result is None:
             break
-        hit_addr.append(result.span()[0] + sliced_addr)
+        hit_addr.append(result.span()[0])
         if result.span()[1] >= bytes_file_len:
             break
-        bytes_file = bytes_file[(result.span()[1]):]
-        sliced_addr += result.span()[1]
+        sliced_addr = result.span()[1]
     if need_progress_bar:
         progress_bar.destroy()
     return hit_addr

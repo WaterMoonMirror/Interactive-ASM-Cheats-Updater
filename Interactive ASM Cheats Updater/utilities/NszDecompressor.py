@@ -15,8 +15,9 @@ import tkinter
 import tkinter.ttk
 
 class Progress_Bar:
+	# Hints: Toplevel of the running app, not a second Tk interpreter (see bytes_process.Progress_Bar)
 	def __init__(self, ncz_file_size):
-		self.root = tkinter.Tk()
+		self.root = tkinter.Toplevel(tkinter._default_root)
 		self.root.geometry('800x30')
 		self.root.title('Decompressing NCZ File ...')
 		self.left_text = tkinter.Label(self.root, text='Decompress  0%')
@@ -41,7 +42,7 @@ class Progress_Bar:
 				self.left_text.config(text=f'Decompress  {decompressed_ncz_file_size*100//self.ncz_file_size}%')
 				self.progressbarOne['value'] = decompressed_ncz_file_size
 				self.right_text.config(text=f'{decompressed_ncz_file_size}/{self.ncz_file_size} MiB [{time.strftime("%M:%S", time.localtime(elapsed_time))}<{time.strftime("%M:%S", time.localtime(eta_time))}, {"%.2f" % process_speed} MiB/s]')
-				self.root.update()
+				self.root.update_idletasks()
 	
 	def destroy(self):
 		self.root.destroy()

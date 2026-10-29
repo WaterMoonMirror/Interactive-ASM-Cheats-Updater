@@ -405,6 +405,7 @@ localization = {
                 "Wing length check message": """['Wing length must be int or list, eg. "20", "[15,10]". Setting to default value.']""",
                 "Extra wing length check message": """['Extra wing length must be int or list, eg. "20", "[15,10]". Setting to default value.']""",
                 "To many results": """[f'Too many results, address number will be limited to {self.max_shown_address}.']""",
+                "Button error": """['This action failed, the program is still usable.', 'Check "log/CodeUpdaterLog.log" for the traceback.']""",
 
                 "code_title": """['This is code title.']""",
                 "master_code_title": """['This is master code title.']""",
@@ -495,6 +496,7 @@ localization = {
                 "Wing length check message": """['翼展宽度必须为整数，如："20"，"[15,10]"']""",
                 "Extra wing length check message": """['额外翼展宽度必须为整数，如："20"，"[15,10]"']""",
                 "To many results": """[f'定位结果过多，将缩减地址数至{self.max_shown_address}']""",
+                "Button error": """['该按钮操作出错，程序仍可继续使用。', '详细错误信息见 log/CodeUpdaterLog.log。']""",
 
                 "code_title": """['这是普通码标题。']""",
                 "master_code_title": """['这是大师码标题。']""",

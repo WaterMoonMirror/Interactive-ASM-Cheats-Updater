@@ -1,5 +1,5 @@
 from asyncio.subprocess import PIPE, STDOUT
-import tkinter, os, base64, webbrowser, re, time, json, sys
+import tkinter, os, base64, webbrowser, re, time, json, sys, traceback
 from tkinter import dialog
 from copy import deepcopy
 from capstone import *
@@ -258,6 +258,7 @@ class CodeUpdaterInterface:
     def init_UI(self, globalInfo):
         self.mainWin = tkinter.Tk()
         self.mainWin.title(globalInfo.title)
+        self.mainWin.report_callback_exception = self.report_callback_exception
 
         self.generate_icon('xcw.ico', xcw_ico)
         self.mainWin.iconbitmap("xcw.ico")
@@ -505,6 +506,13 @@ class CodeUpdaterInterface:
         self.new_is_NSO_file = False
         self.is_initialized = False
         self.is_ended = False
+
+    def report_callback_exception(self, exc, val, tb):
+        # Hints: buttons without a try/except would otherwise only print to stderr
+        msg = ''.join(traceback.format_exception(exc, val, tb))
+        self.logger.error(msg)
+        self.log_text_out(msg, False)
+        messagebox.showerror(title='Error', message='\n'.join(eval(self.msg_map['Button error'])))
 
     def generate_icon(self, pic_name, pic_base64):
         image = open(pic_name, 'wb')
