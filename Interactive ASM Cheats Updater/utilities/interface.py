@@ -1296,7 +1296,8 @@ class CodeUpdaterInterface:
         self.clear_log_text()
         self.reset_middle_ASM_state()
         self.midASMDataContainer.flush()
-        self.reset_wings_text()
+        # Hints: wing length is left as it is so a value the user typed keeps applying to
+        # the following chunks instead of silently reverting to the default.
 
     def check_next_step(self):
         code_num = self.cur_position[0]
